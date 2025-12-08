@@ -109,10 +109,8 @@ the-brain/
 ├── api/
 │   ├── queries.py              # Sprint 2 - warehouse layer
 │   └── probability.py          # Sprint 2 - math helpers
-├── chat/
-│   ├── app.py                  # Sprint 3 - Streamlit
-│   ├── tools.py                # Sprint 3 - LLM tools
-│   └── prompts.py              # Sprint 3 - system prompts
+├── brain_mcp/
+│   └── server.py               # Sprint 3 - MCP server (5 tools)
 ├── bots/
 │   ├── strategies.py           # Sprint 5
 │   └── runner.py               # Sprint 5

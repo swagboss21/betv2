@@ -64,27 +64,32 @@ User: "Should I bet Tatum over 27.5 points tonight?"
 - Need bet tracking + outcome memory
 - Need to optimize research flow (generate bet in <10 queries)
 
-### Technical Decisions Needed
-- Web framework: Streamlit (fast) vs Flask vs Next.js (production)?
-- Database: SQLite (simple) vs Postgres (scalable)?
-- Auth: Simple email/password vs OAuth?
-- Hosting: Vercel? Railway? AWS?
+### Technical Decisions Made
+- Interface: MCP Server (Claude Desktop integration) ✅
+- Database: PostgreSQL ✅
+- Auth: TBD (pending SaaS phase)
+- Hosting: TBD (pending SaaS phase)
 
 ---
 
 ## To Test Locally
 
+**Via Claude Desktop (Recommended):**
+1. Add `.mcp.json` config to Claude Desktop settings
+2. Restart Claude Desktop
+3. Tools available: `get_games_today`, `get_projection`, `get_best_props`, `get_injuries`, `lock_bet`
+
+**Direct MCP test:**
 ```bash
 cd "/Users/noahcantu/Desktop/the-brain-organized 2"
-export ANTHROPIC_API_KEY="sk-ant-..."
-python poc.py
+python -m brain_mcp.server
 ```
 
-Then try:
+Example prompts:
 - "What games are on tonight?"
 - "Should I bet LeBron over 25.5 points vs Boston?"
-- "AD is out tonight" (sets injury override)
-- "Give me a risky parlay for the Lakers game"
+- "Check Lakers injuries"
+- "Best props for tonight?"
 
 ---
 
@@ -92,9 +97,9 @@ Then try:
 
 | File | Purpose |
 |------|---------|
-| `poc.py` | Working CLI chat prototype |
+| `brain_mcp/server.py` | MCP server (5 tools) |
+| `api/queries.py` | Database query functions |
 | `simulation/engine.py` | Monte Carlo simulation |
-| `simulation/parlay_analyzer.py` | Correlation detection |
 | `models/*.pkl` | Trained XGBoost models |
 | `CLAUDE.md` | Project documentation |
 
@@ -117,8 +122,8 @@ https://github.com/swagboss21/betv2.git
 
 ## Suggested Next Steps
 
-1. **Validate with users** - Have 3-5 people test the CLI, gather feedback
-2. **Define "bet" flow** - Structured 3-5 step wizard that counts as 1 bet
-3. **Add memory** - SQLite for bet history + outcomes
-4. **Build web UI** - Simple Streamlit prototype
-5. **Add auth** - User accounts, usage tracking
+1. **Validate with users** - Have 3-5 people test via Claude Desktop, gather feedback
+2. **Add live odds** - Integrate SportsGameOdds API for real lines
+3. **Improve data pipeline** - Automate batch jobs, add outcome tracking
+4. **Add bet memory** - Track locked bets and results
+5. **Build web API** - REST/GraphQL for future web/mobile clients

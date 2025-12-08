@@ -12,7 +12,7 @@
 |---------|------|--------|
 | S4-T1 | Implement fetch_actuals | `batch/grade_bets.py` |
 | S4-T2 | Implement grade_bets | `batch/grade_bets.py` |
-| S4-T3 | Display user record in sidebar | `chat/app.py` |
+| S4-T3 | Display user record | `api/queries.py` (via MCP) |
 | S4-T4 | Integration test | Test pass |
 
 ---
@@ -118,7 +118,7 @@ def grade_bets(game_id: str):
 | S5-T1 | Create bot strategies | `bots/strategies.py` |
 | S5-T2 | Implement bot runner | `bots/runner.py` |
 | S5-T3 | Add bot grading to batch | `batch/grade_bets.py` |
-| S5-T4 | Display leaderboard | `chat/app.py` |
+| S5-T4 | Display leaderboard | `api/queries.py` (via MCP) |
 
 ---
 
@@ -253,10 +253,13 @@ if dead_bots:
 | Task ID | Task | Output |
 |---------|------|--------|
 | S6-T1 | Add Google OAuth | `auth/oauth.py` |
-| S6-T2 | Wire auth to Streamlit | `chat/app.py` |
-| S6-T3 | Implement free tier limit | `chat/app.py` |
-| S6-T4 | Add upgrade prompt | `chat/app.py` |
+| S6-T2 | Wire auth to API | `api/queries.py` |
+| S6-T3 | Implement free tier limit | `api/queries.py` |
+| S6-T4 | Add upgrade prompt | MCP tool response |
 | S6-T5 | Integration test | Test pass |
+
+> **Note:** Sprint 3 pivoted to MCP Server. Auth and limits will be implemented
+> at the API layer, not in a web UI. Claude Desktop uses the MCP server directly.
 
 ---
 
@@ -272,15 +275,15 @@ Before executing Sprint 6, decide:
 
 ---
 
-## Google OAuth with Streamlit
+## OAuth for API Access
 
-Use `streamlit-authenticator` or simple OAuth flow:
+For MCP/API architecture, OAuth is implemented at the API layer:
 
 ```python
 # auth/oauth.py
-import streamlit as st
 from google.oauth2 import id_token
 from google.auth.transport import requests
+import os
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 
@@ -296,42 +299,38 @@ def verify_google_token(token: str) -> dict:
     }
 ```
 
-Alternatively, use Streamlit's built-in secrets + components:
-```python
-# Simpler approach for v1:
-st.sidebar.text_input("Email (for tracking)")
-```
+For v1 MCP (Claude Desktop), user tracking uses a default ID.
+Full auth deferred to SaaS web phase.
 
 ---
 
 ## Free Tier Limit
 
 ```python
-# In chat/app.py, before processing message:
+# In api/queries.py, check before processing:
 
 from api.queries import get_user, increment_message_count, is_user_paid
 
 FREE_LIMIT = 3
 
-if st.session_state.user_id:
-    user = get_user(st.session_state.user_id)
-    
-    if not is_user_paid(user['id']) and user['message_count'] >= FREE_LIMIT:
-        st.error("🚫 Free trial complete!")
-        st.info("""
-        You've used all 3 free messages. 
-        
-        **Upgrade to Pro ($15/month):**
-        - Unlimited prop analysis
-        - Full bet tracking
-        - Priority support
-        
-        [Upgrade Now](https://your-payment-link.com)
-        """)
-        st.stop()
-    
-    # Track this message
-    increment_message_count(user['id'])
+def check_usage_limit(user_id: str) -> bool:
+    """Return True if user can make request, False if limit exceeded."""
+    user = get_user(user_id)
+    if not user:
+        return False
+    if is_user_paid(user['id']):
+        return True
+    return user['message_count'] < FREE_LIMIT
+
+# Limit exceeded response (returned in MCP tool output):
+LIMIT_MESSAGE = """
+Free trial complete! You've used all 3 free messages.
+
+Upgrade to Pro ($15/month):
+- Unlimited prop analysis
+- Full bet tracking
+- Priority support
+"""
 ```
 
 ---

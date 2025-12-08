@@ -1,10 +1,15 @@
 # SPRINT 3: THE SALESPERSON (Chat MVP)
 
-**Goal:** Chat interface that users actually interact with.
+> **HISTORICAL DOCUMENT** - This sprint originally planned a Streamlit chat interface.
+> The implementation pivoted to **MCP Server** (`brain_mcp/server.py`) for Claude Desktop integration.
+> This file is kept for reference only.
+
+**Original Goal:** Chat interface that users actually interact with.
+**Actual Delivery:** MCP Server with 5 tools for Claude Desktop.
 **Duration:** 3-4 days
 **Blocker Risk:** Medium — LLM tuning
 
-**THIS IS YOUR MVP.** After Sprint 3, you can share with friends and get feedback.
+**THIS IS YOUR MVP.** After Sprint 3, you can share with friends and get feedback via Claude Desktop.
 
 ---
 

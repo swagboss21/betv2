@@ -162,9 +162,7 @@ Create the following directory structure (if directories don't exist):
 - db/migrations/
 - batch/
 - api/
-- chat/
-- bots/
-- auth/
+- brain_mcp/
 - tests/
 
 Do NOT touch existing directories: simulation/, models/, archive/
@@ -175,7 +173,7 @@ Create empty __init__.py files in each Python package directory.
 **Verification:**
 ```bash
 # verify_s0t3.sh
-for dir in db batch api chat bots auth tests; do
+for dir in db batch api brain_mcp tests; do
   [ -d "$dir" ] && echo "✅ $dir exists" || echo "❌ $dir missing"
 done
 ```

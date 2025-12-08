@@ -105,10 +105,8 @@ the-brain/
 ├── api/
 │   ├── queries.py
 │   └── probability.py
-├── chat/
-│   ├── app.py
-│   ├── tools.py
-│   └── prompts.py
+├── brain_mcp/
+│   └── server.py
 ├── bots/
 │   ├── strategies.py
 │   └── runner.py

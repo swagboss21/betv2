@@ -34,14 +34,14 @@ Before executing Sprint 1, confirm:
 ### S1-T1: Implement fetch_tonights_games
 
 **Type:** API Integration
-**Input:** nba_api docs, existing `poc.py` (has `get_todays_games` function)
+**Input:** nba_api docs
 **Output:** Updated `batch/precompute.py`
 
 **Task Prompt for Sub-Agent:**
 ```
 Implement the fetch_tonights_games() function in batch/precompute.py.
 
-Reference: Look at poc.py which already has a working get_todays_games() function using nba_api.
+Note: Original reference (poc.py) has been removed. Use nba_api.live.endpoints.scoreboard directly.
 
 Requirements:
 1. Use nba_api.live.endpoints.scoreboard to get today's games
@@ -213,14 +213,16 @@ sqlite3 brain.db "SELECT COUNT(*) FROM projections"  # Should show rows
 ### S1-T4: Implement Injury Scraper
 
 **Type:** Web Scraping
-**Input:** Existing `poc.py` (has `scrape_espn_injuries`)
+**Input:** ESPN injury pages
 **Output:** Updated `batch/scrape_injuries.py`
 
 **Task Prompt for Sub-Agent:**
 ```
-Implement batch/scrape_injuries.py by porting logic from poc.py.
+Implement batch/scrape_injuries.py.
 
-The existing poc.py has a working scrape_espn_injuries() function. Port it to:
+Note: Original reference (poc.py) has been removed. Implement from ESPN's injury page.
+
+Target functions:
 
 scrape_espn() -> dict:
     Returns {

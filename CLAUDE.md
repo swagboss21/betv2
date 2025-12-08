@@ -14,7 +14,7 @@ All core components built and tested:
 | 0. Database | ✅ COMPLETE | PostgreSQL schema, 6 tables |
 | 1. Batch Pipeline | ✅ COMPLETE | Monte Carlo precompute + ESPN scraper |
 | 2. API Layer | ✅ COMPLETE | 13 query functions, 30/30 tests passing |
-| 3. Chat Interface | ✅ COMPLETE | Streamlit UI + concise response format |
+| 3. MCP Server | ✅ COMPLETE | Claude Desktop integration via MCP protocol |
 
 ---
 
@@ -37,10 +37,9 @@ User Query → LLM (Claude) → Tools → Monte Carlo Engine → Response
 - `parlay_analyzer.py` - Detect correlated legs, generate thesis
 - `models.py` - Data classes for inputs/outputs
 
-### Chat Interface (`chat/`)
-- `app.py` - Streamlit chat UI
-- `tools.py` - LLM tool definitions (5 tools)
-- `prompts.py` - System prompt with concise 3-section format
+### MCP Server (`brain_mcp/`)
+- `server.py` - MCP server exposing 5 tools to Claude Desktop
+- `.mcp.json` - Claude Desktop configuration
 
 Tools available:
 - `get_games_today` - Tonight's NBA schedule
@@ -51,11 +50,18 @@ Tools available:
 
 ---
 
-## Running the Chat
+## Using MCP Server
 
+The Brain integrates with Claude Desktop via MCP (Model Context Protocol).
+
+**Setup:**
+1. Copy `.mcp.json` contents to Claude Desktop config
+2. Restart Claude Desktop
+3. Tools are automatically available in conversation
+
+**Manual test:**
 ```bash
-cd "/path/to/the-brain-organized 2"
-streamlit run chat/app.py
+python -m brain_mcp.server
 ```
 
 API keys loaded from `.env` automatically.
@@ -96,10 +102,8 @@ Building toward SaaS product:
 ## Key Files
 
 ```
-chat/
-  app.py                    # Streamlit chat interface
-  tools.py                  # LLM tool definitions
-  prompts.py                # System prompt
+brain_mcp/
+  server.py                 # MCP server (5 tools)
 api/
   queries.py                # Database query functions
   probability.py            # Probability calculations

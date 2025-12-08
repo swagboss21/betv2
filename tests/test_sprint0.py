@@ -21,7 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 class TestFolderStructure:
     """Verify directory structure exists."""
 
-    REQUIRED_DIRS = ["db", "batch", "api", "chat", "bots", "auth", "tests"]
+    REQUIRED_DIRS = ["db", "batch", "api", "brain_mcp", "tests"]
 
     def test_directories_exist(self):
         for dir_name in self.REQUIRED_DIRS:

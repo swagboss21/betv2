@@ -157,16 +157,18 @@ if proj:
 
 ---
 
-## What's Next: Sprint 3
+## What's Next: Sprint 3 (COMPLETE)
 
-Sprint 3 is the **Chat Interface** - integrating the API layer with the LLM tools in `poc.py`.
+Sprint 3 was the **MCP Server** - integrating the API layer with Claude Desktop via MCP protocol.
 
-Docs: `/Users/noahcantu/Desktop/the-brain-organized 2/docs/files/SPRINT_1.md` (has Sprint 3 details)
+**Completed:** `brain_mcp/server.py` exposes 5 tools to Claude Desktop.
 
-Key tasks:
-- Wire up `get_projection()` with line parameter to LLM tools
-- Update `simulate_prop` tool to use precomputed data when available
-- Add tool for querying alternate lines
+Key deliverables:
+- `get_games_today` - Tonight's NBA schedule
+- `get_projection` - Player stat projection with probability
+- `get_best_props` - Top edge props ranked
+- `get_injuries` - Team injury report
+- `lock_bet` - Save user's bet
 - Update `build_parlay` to use stored projections
 
 ---

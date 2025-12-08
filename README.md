@@ -17,8 +17,9 @@ docker run -d --name brain-postgres \
 # 3. Initialize database
 python db/init_db.py
 
-# 4. Run the chat
-streamlit run chat/app.py
+# 4. Use with Claude Desktop (MCP)
+# Add to Claude Desktop config (~/.config/claude/claude_desktop_config.json):
+# See .mcp.json for server configuration
 ```
 
 ## How It Works
@@ -36,7 +37,7 @@ User Query → LLM (Claude) → Tools → Monte Carlo Engine → Response
 
 ```
 the-brain/
-├── chat/           # Streamlit chat interface
+├── brain_mcp/      # MCP server (Claude Desktop integration)
 ├── simulation/     # Monte Carlo engine (10K sims)
 ├── api/            # Database queries
 ├── batch/          # Scheduled jobs (precompute, injuries)
@@ -52,7 +53,7 @@ the-brain/
 | File | Purpose |
 |------|---------|
 | `CLAUDE.md` | Project context & locked decisions |
-| `chat/app.py` | Streamlit chat interface |
+| `brain_mcp/server.py` | MCP server (5 tools for Claude Desktop) |
 | `simulation/engine.py` | Monte Carlo simulation engine |
 | `api/queries.py` | Database query functions |
 
@@ -64,11 +65,11 @@ the-brain/
 
 ## Current Status
 
-**Sprint 3 Complete** - Chat interface ready for testing
+**Sprint 3 Complete** - MCP server ready for Claude Desktop
 
 | Component | Status |
 |-----------|--------|
 | Monte Carlo Engine | ✅ Complete |
 | Database + API | ✅ Complete |
 | LLM Integration | ✅ Complete |
-| Streamlit Chat | ✅ Complete |
+| MCP Server | ✅ Complete |
