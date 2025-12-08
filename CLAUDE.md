@@ -5,16 +5,16 @@ AI-powered NBA player prop betting co-pilot using Monte Carlo simulation + LLM r
 
 ---
 
-## Current State: v2 COMPLETE ✅
+## Current State: Sprint 3 COMPLETE ✅
 
 All core components built and tested:
 
-| Phase | Status | What's Done |
-|-------|--------|-------------|
-| 1. Data Pipeline | ✅ COMPLETE | 89K player-games, 3 seasons (2022-25) |
-| 2. Model Training | ✅ COMPLETE | Game/Minutes/Stats XGBoost models |
-| 3. Simulation Engine | ✅ COMPLETE | Monte Carlo + injury adjustments |
-| 4. LLM Integration | ✅ COMPLETE | Claude Sonnet 4 + 7 tools |
+| Sprint | Status | What's Done |
+|--------|--------|-------------|
+| 0. Database | ✅ COMPLETE | PostgreSQL schema, 6 tables |
+| 1. Batch Pipeline | ✅ COMPLETE | Monte Carlo precompute + ESPN scraper |
+| 2. API Layer | ✅ COMPLETE | 13 query functions, 30/30 tests passing |
+| 3. Chat Interface | ✅ COMPLETE | Streamlit UI + concise response format |
 
 ---
 
@@ -37,30 +37,28 @@ User Query → LLM (Claude) → Tools → Monte Carlo Engine → Response
 - `parlay_analyzer.py` - Detect correlated legs, generate thesis
 - `models.py` - Data classes for inputs/outputs
 
-### LLM Integration (`poc.py`)
+### Chat Interface (`chat/`)
+- `app.py` - Streamlit chat UI
+- `tools.py` - LLM tool definitions (5 tools)
+- `prompts.py` - System prompt with concise 3-section format
+
 Tools available:
-- `simulate_prop` - Simulate any player prop bet
-- `get_player_projection` - Full stat projections for a player
-- `check_injuries` - ESPN scraper + user overrides
-- `set_injury` - Manual injury input ("AD is out")
-- `get_lineup` - Team roster via nba_api
-- `get_tonight_games` - Today's schedule
-- `build_parlay` - Correlated parlay analysis with thesis
+- `get_games_today` - Tonight's NBA schedule
+- `get_projection` - Player stat projection with probability
+- `get_best_props` - Top edge props ranked
+- `get_injuries` - Team injury report
+- `lock_bet` - Save user's bet
 
 ---
 
-## Running the POC
+## Running the Chat
 
 ```bash
 cd "/path/to/the-brain-organized 2"
-export ANTHROPIC_API_KEY="your-key"
-python poc.py
+streamlit run chat/app.py
 ```
 
-Commands:
-- `quit` - Exit
-- `clear` - Reset conversation
-- `injuries` - Clear injury overrides
+API keys loaded from `.env` automatically.
 
 ---
 
@@ -98,19 +96,19 @@ Building toward SaaS product:
 ## Key Files
 
 ```
-poc.py                      # LLM chat interface (working)
+chat/
+  app.py                    # Streamlit chat interface
+  tools.py                  # LLM tool definitions
+  prompts.py                # System prompt
+api/
+  queries.py                # Database query functions
+  probability.py            # Probability calculations
 simulation/
   engine.py                 # Monte Carlo engine
-  feature_transformer.py    # Live data fetching
-  injury_adjustment.py      # Injury boost logic
-  edge_calculator.py        # Odds conversion
   parlay_analyzer.py        # Correlation detection
-  models.py                 # Data classes
-models/
-  game_model.pkl            # Team score model
-  minutes_model.pkl         # Player minutes model
-  stats_models.pkl          # 7 stat models
-training_data_v2.csv        # 89K rows training data
+batch/
+  precompute.py             # Nightly projection job
+  scrape_injuries.py        # ESPN injury scraper
 ```
 
 ---
@@ -120,4 +118,4 @@ training_data_v2.csv        # 89K rows training data
 - Suggest switching APIs (SGO is LOCKED)
 - Use >4 seasons of historical data
 - Make LLM do math (engine does math, LLM explains)
-- Build UI before core loop is validated
+- Push parlays unless user asks (response format rule)

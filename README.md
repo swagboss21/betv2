@@ -1,82 +1,74 @@
-# The Brain - NBA Player Prop Prediction
+# The Brain - NBA Betting Co-Pilot
 
-AI-powered NBA player prop betting analysis tool.
-
-## What It Does
-
-Predicts whether player props will hit OVER or UNDER based on historical data.
-
-**Example:** "Will LeBron score over 25.5 points?" → Model predicts OVER or UNDER
-
-## Current Status
-
-- **Model:** Logistic Regression v1
-- **Accuracy:** 61.76% (baseline: 60.66%)
-- **Data:** ~96,000 historical player props (2023-24 & 2024-25 seasons)
+AI-powered NBA player prop betting assistant using Monte Carlo simulation + LLM.
 
 ## Quick Start
 
-### Make a Prediction
-
-```python
-import pickle
-import pandas as pd
-
-# Load model
-with open('models/logistic_v1.pkl', 'rb') as f:
-    model = pickle.load(f)
-
-# Predict
-prop = pd.DataFrame({
-    'line': [25.5],
-    'over_implied': [0.48],
-    'under_implied': [0.57],
-    'stat_type': ['points']
-})
-
-prob = model.predict_proba(prop)[0]
-print(f"Over: {prob[1]:.1%}, Under: {prob[0]:.1%}")
-```
-
-### Run the Pipeline
-
 ```bash
-# 1. Fetch data from SGO API
-python scripts/1_fetch_data.py
+# 1. Install dependencies
+pip install -r requirements.txt
 
-# 2. Transform JSON to CSV
-python scripts/2_transform_data.py
+# 2. Set up PostgreSQL (Docker)
+docker run -d --name brain-postgres \
+  -e POSTGRES_PASSWORD=brain123 \
+  -e POSTGRES_DB=brain \
+  -p 5432:5432 postgres:15
 
-# 3. Train the model
-python scripts/3_train_model.py
+# 3. Initialize database
+python db/init_db.py
 
-# 4. Make predictions
-python scripts/4_predict.py
+# 4. Run the chat
+streamlit run chat/app.py
 ```
+
+## How It Works
+
+```
+User Query → LLM (Claude) → Tools → Monte Carlo Engine → Response
+```
+
+1. **User asks**: "Best props tonight?" or "4-leg parlay for Lakers game"
+2. **LLM calls tools**: Fetches projections, checks injuries
+3. **Engine runs**: 10K Monte Carlo simulations per prop
+4. **Response**: Concise recommendation with probability + edge
 
 ## Project Structure
 
 ```
 the-brain/
-├── scripts/           # Core pipeline (numbered 1-4)
-├── analysis/          # Analysis tools
-├── data/raw/          # Source JSON from SGO API
-├── data/processed/    # Training CSV
-├── models/            # Trained model (.pkl)
-└── docs/              # Documentation
+├── chat/           # Streamlit chat interface
+├── simulation/     # Monte Carlo engine (10K sims)
+├── api/            # Database queries
+├── batch/          # Scheduled jobs (precompute, injuries)
+├── db/             # PostgreSQL schema
+├── models/         # Trained XGBoost models
+├── tests/          # Test suite (pytest)
+├── scripts/        # Model training pipeline
+└── docs/           # Sprint plans & architecture
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `CLAUDE.md` | Full project context and decisions |
-| `docs/SHORTCOMINGS_REPORT_VERIFIED.md` | Known issues and improvement roadmap |
-| `models/logistic_v1.pkl` | Trained prediction model |
+| `CLAUDE.md` | Project context & locked decisions |
+| `chat/app.py` | Streamlit chat interface |
+| `simulation/engine.py` | Monte Carlo simulation engine |
+| `api/queries.py` | Database query functions |
 
-## Next Steps
+## Documentation
 
-See `docs/SHORTCOMINGS_REPORT_VERIFIED.md` for improvement roadmap:
-1. Lower prediction threshold (0.50 → 0.40) for better over detection
-2. Add player_id as feature (+3-5% accuracy)
-3. Address class imbalance with balanced weighting
+- `CLAUDE.md` - Project context, architecture, decisions
+- `docs/SYSTEM_ARCHITECTURE_V2.md` - Detailed system design
+- `docs/files/SPRINT_*.md` - Sprint execution plans
+
+## Current Status
+
+**Sprint 3 Complete** - Chat interface ready for testing
+
+| Component | Status |
+|-----------|--------|
+| Monte Carlo Engine | ✅ Complete |
+| Database + API | ✅ Complete |
+| LLM Integration | ✅ Complete |
+| Streamlit Chat | ✅ Complete |

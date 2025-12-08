@@ -21,6 +21,7 @@ archive/prompt wrapper test/data/chats/*.json
 # ===================
 .env
 *.env
+.mcp.json
 
 # ===================
 # Python
