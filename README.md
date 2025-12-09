@@ -59,9 +59,17 @@ the-brain/
 
 ## Documentation
 
-- `CLAUDE.md` - Project context, architecture, decisions
-- `docs/SYSTEM_ARCHITECTURE_V2.md` - Detailed system design
-- `docs/files/SPRINT_*.md` - Sprint execution plans
+- `CLAUDE.md` - Project context, architecture, locked decisions
+- `docs/files/SPRINT_3.md` - MCP server implementation (complete)
+- `docs/files/SPRINTS_4_5_6.md` - Future sprints (results, bots, auth)
+
+## Example Prompts
+
+Try these with Claude Desktop:
+- "What games are on tonight?"
+- "Should I bet LeBron over 25.5 points vs Boston?"
+- "Check Lakers injuries"
+- "Best props for tonight?"
 
 ## Current Status
 
@@ -73,3 +81,14 @@ the-brain/
 | Database + API | ✅ Complete |
 | LLM Integration | ✅ Complete |
 | MCP Server | ✅ Complete |
+
+## What NOT to Do
+
+- Don't rebuild the simulation engine (it works)
+- Don't switch LLM providers without testing
+- Don't add features before validating core loop with real users
+- Don't make the LLM do math (engine does math, LLM explains)
+
+## GitHub
+
+https://github.com/swagboss21/betv2.git

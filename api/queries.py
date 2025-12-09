@@ -42,18 +42,22 @@ def get_projection(player_name: str, stat_type: str, game_id: Optional[str] = No
     Returns:
         Projection dict with mean, std, p10-p90, and if line provided: prob_over, prob_under
     """
-    from api.probability import prob_over, prob_under
+    from api.probability import (
+        prob_over, prob_under,
+        prob_over_empirical, prob_under_empirical,
+        prob_over_from_percentiles
+    )
 
     with get_db_cursor() as cursor:
         if game_id:
             cursor.execute("""
-                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90
+                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90, sim_histogram
                 FROM projections
                 WHERE LOWER(player_name) = LOWER(%s) AND stat_type = %s AND game_id = %s
             """, (player_name, stat_type, game_id))
         else:
             cursor.execute("""
-                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90
+                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90, sim_histogram
                 FROM projections
                 WHERE LOWER(player_name) = LOWER(%s) AND stat_type = %s
                 ORDER BY computed_at DESC
@@ -66,11 +70,23 @@ def get_projection(player_name: str, stat_type: str, game_id: Optional[str] = No
 
         result = dict(row)
 
-        # If line provided, calculate probabilities using normal distribution
+        # If line provided, calculate probabilities
         if line is not None:
             result['line'] = line
-            result['prob_over'] = prob_over(result['mean'], result['std'], line)
-            result['prob_under'] = prob_under(result['mean'], result['std'], line)
+
+            # Use empirical probability if histogram available (more accurate for count data)
+            if result.get('sim_histogram'):
+                result['prob_over'] = prob_over_empirical(result['sim_histogram'], line)
+                result['prob_under'] = prob_under_empirical(result['sim_histogram'], line)
+            else:
+                # Fallback: use percentile interpolation (more accurate than normal for count data)
+                result['prob_over'] = prob_over_from_percentiles(
+                    result['p10'], result['p25'], result['p50'], result['p75'], result['p90'], line
+                )
+                result['prob_under'] = 1.0 - result['prob_over']
+
+        # Don't return the histogram to the caller (it's internal)
+        result.pop('sim_histogram', None)
 
         return result
 
@@ -112,12 +128,17 @@ def get_best_props(min_edge: float = 0.05, limit: int = 10) -> list[dict]:
         - mean, std, line, direction
         - probability, edge, edge_formatted
     """
-    from api.probability import prob_over, prob_under, format_edge
+    from api.probability import (
+        format_edge,
+        prob_over_empirical,
+        prob_over_from_percentiles
+    )
 
     with get_db_cursor() as cursor:
-        # Get all projections for today's games
+        # Get all projections for today's games (including histogram and percentiles)
         cursor.execute("""
-            SELECT p.game_id, p.player_name, p.stat_type, p.mean, p.std, p.p50
+            SELECT p.game_id, p.player_name, p.stat_type, p.mean, p.std, p.p50,
+                   p.p10, p.p25, p.p75, p.p90, p.sim_histogram
             FROM projections p
             JOIN games g ON p.game_id = g.id
             WHERE g.status = 'scheduled' OR DATE(g.starts_at) = CURRENT_DATE
@@ -136,9 +157,16 @@ def get_best_props(min_edge: float = 0.05, limit: int = 10) -> list[dict]:
         if std <= 0 or line is None:
             continue
 
-        # Calculate probabilities
-        p_over = prob_over(mean, std, line)
-        p_under = prob_under(mean, std, line)
+        # Calculate probabilities using empirical method (more accurate for count data)
+        if proj.get('sim_histogram'):
+            p_over = prob_over_empirical(proj['sim_histogram'], line)
+        else:
+            # Fallback to percentile interpolation
+            p_over = prob_over_from_percentiles(
+                proj.get('p10', 0), proj.get('p25', 0), proj.get('p50', 0),
+                proj.get('p75', 0), proj.get('p90', 0), line
+            )
+        p_under = 1.0 - p_over
 
         # Pick better direction
         if p_over >= p_under:
@@ -189,6 +217,46 @@ def get_injuries(team: str) -> list[dict]:
             ORDER BY player_name
         """, (team,))
         return [dict(row) for row in cursor.fetchall()]
+
+
+def get_tonight_injuries() -> list[dict]:
+    """Get injuries for all teams playing tonight, grouped by game.
+
+    Returns:
+        List of dicts with structure:
+        {
+            "game_id": "0022400123",
+            "matchup": "BOS @ LAL",
+            "starts_at": datetime or None,
+            "home_team": "LAL",
+            "away_team": "BOS",
+            "home_injuries": [...],
+            "away_injuries": [...]
+        }
+    """
+    with get_db_cursor() as cursor:
+        cursor.execute("""
+            SELECT id, home_team, away_team, starts_at
+            FROM games
+            WHERE status = 'scheduled'
+            ORDER BY starts_at NULLS LAST
+        """)
+        games = [dict(row) for row in cursor.fetchall()]
+
+        result = []
+        for game in games:
+            home_injuries = get_injuries(game['home_team'])
+            away_injuries = get_injuries(game['away_team'])
+            result.append({
+                "game_id": game['id'],
+                "matchup": f"{game['away_team']} @ {game['home_team']}",
+                "starts_at": game['starts_at'],
+                "home_team": game['home_team'],
+                "away_team": game['away_team'],
+                "home_injuries": home_injuries,
+                "away_injuries": away_injuries
+            })
+        return result
 
 
 def save_bet(user_id: str, bet: dict) -> int:

@@ -222,6 +222,10 @@ class SimulationResult:
     # Injury scenarios (e.g., {"if_ad_out": {...}})
     scenarios: Dict[str, dict] = field(default_factory=dict)
 
+    # Raw simulation arrays for empirical probability calculation
+    # Structure: {player_name: {stat: np.ndarray of 10K values}}
+    raw_simulations: Dict[str, Dict[str, np.ndarray]] = field(default_factory=dict)
+
     def to_dict(self) -> dict:
         return {
             "game": {

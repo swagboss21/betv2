@@ -22,6 +22,7 @@ from api.queries import (
     get_projection,
     get_best_props,
     get_injuries,
+    get_tonight_injuries,
     save_bet,
 )
 
@@ -95,6 +96,15 @@ async def list_tools() -> list[Tool]:
                     }
                 },
                 "required": ["team"]
+            }
+        ),
+        Tool(
+            name="get_tonight_injuries",
+            description="Get injury reports for all teams playing tonight, grouped by game. Returns injuries for both home and away teams for each scheduled game. More efficient than calling get_injuries for each team separately.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         ),
         Tool(
@@ -221,6 +231,42 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             }
             if not injuries:
                 result["message"] = f"No injuries reported for {team}"
+
+        elif name == "get_tonight_injuries":
+            games_injuries = get_tonight_injuries()
+
+            result = {
+                "games": [
+                    {
+                        "game_id": g['game_id'],
+                        "matchup": g['matchup'],
+                        "starts_at": str(g['starts_at']),
+                        "home_team": g['home_team'],
+                        "away_team": g['away_team'],
+                        "home_injuries": [
+                            {
+                                "player": inj['player_name'],
+                                "status": inj['status'],
+                                "injury": inj['injury']
+                            }
+                            for inj in g['home_injuries']
+                        ],
+                        "away_injuries": [
+                            {
+                                "player": inj['player_name'],
+                                "status": inj['status'],
+                                "injury": inj['injury']
+                            }
+                            for inj in g['away_injuries']
+                        ],
+                        "total_injuries": len(g['home_injuries']) + len(g['away_injuries'])
+                    }
+                    for g in games_injuries
+                ],
+                "count": len(games_injuries)
+            }
+            if not games_injuries:
+                result["message"] = "No games scheduled for tonight"
 
         elif name == "lock_bet":
             # Use a default user_id for MCP (can be enhanced later)

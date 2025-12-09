@@ -31,6 +31,10 @@ class MonteCarloEngine:
     # Stats we can simulate
     STAT_TYPES = ["pts", "reb", "ast", "stl", "blk", "tov", "fg3m"]
 
+    # Stats that are discrete counts (use Poisson distribution instead of Normal)
+    # These are low-count stats where normal distribution is inappropriate
+    COUNT_STATS = {"fg3m", "stl", "blk"}
+
     def __init__(self, models_dir: str = "models/"):
         """
         Load all trained models.
@@ -268,17 +272,33 @@ class MonteCarloEngine:
             stat_pred = stat_model.predict(stat_features)[0]
             stat_std = self._get_stat_variance(stat, stat_pred)
 
-            # Scale by minutes played vs expected
-            # If playing more minutes, stats increase proportionally
+            # Minutes adjustment: only for extreme deviations from expected
+            # The model already accounts for expected minutes via min_L5_avg feature,
+            # so we only adjust for significant deviations (injury scenarios, etc.)
             if player.min_L5_avg > 0:
-                minutes_factor = sim_minutes / player.min_L5_avg
-                # Dampen the effect (not fully linear)
-                minutes_factor = 0.5 + 0.5 * minutes_factor
+                minutes_ratio = sim_minutes / player.min_L5_avg
+                if minutes_ratio < 0.8:
+                    # DNP or injury - scale down proportionally
+                    minutes_factor = minutes_ratio
+                elif minutes_ratio > 1.2:
+                    # Extended minutes (teammate injury) - modest boost
+                    minutes_factor = 1.0 + 0.25 * (minutes_ratio - 1.0)
+                else:
+                    # Normal variation (0.8-1.2x) - no adjustment
+                    minutes_factor = 1.0
             else:
                 minutes_factor = 1.0
 
-            sim_stat = np.random.normal(stat_pred * minutes_factor, stat_std)
-            sim_stat = max(0, sim_stat)  # Can't be negative
+            # Use appropriate distribution based on stat type
+            if stat in self.COUNT_STATS:
+                # Poisson distribution for discrete count data (fg3m, stl, blk)
+                # Lambda must be > 0 for Poisson
+                lambda_param = max(0.01, stat_pred * minutes_factor)
+                sim_stat = float(np.random.poisson(lambda_param))
+            else:
+                # Normal distribution for higher-volume stats (pts, reb, ast, tov)
+                sim_stat = np.random.normal(stat_pred * minutes_factor, stat_std)
+                sim_stat = max(0, sim_stat)  # Can't be negative
 
             results["players"][player.player_name][stat][sim_idx] = sim_stat
 
@@ -320,6 +340,15 @@ class MonteCarloEngine:
                 fg3m=StatDistribution.from_simulations(player_data["fg3m"])
             )
 
+        # Copy raw simulations for empirical probability calculation
+        raw_simulations = {
+            player_name: {
+                stat: player_data[stat].copy()
+                for stat in self.STAT_TYPES
+            }
+            for player_name, player_data in sim_results["players"].items()
+        }
+
         return SimulationResult(
             home_team=context.home_team_abbr,
             away_team=context.away_team_abbr,
@@ -327,7 +356,8 @@ class MonteCarloEngine:
             n_simulations=n_simulations,
             home_score=home_score_dist,
             away_score=away_score_dist,
-            players=player_predictions
+            players=player_predictions,
+            raw_simulations=raw_simulations
         )
 
     def simulate_player_prop(
@@ -403,13 +433,24 @@ class MonteCarloEngine:
             stat_pred = stat_model.predict(stat_features)[0]
             stat_std = self._get_stat_variance(stat, stat_pred)
 
-            # Minutes adjustment
+            # Minutes adjustment: only for extreme deviations
             if player.min_L5_avg > 0:
-                minutes_factor = 0.5 + 0.5 * (sim_minutes / player.min_L5_avg)
+                minutes_ratio = sim_minutes / player.min_L5_avg
+                if minutes_ratio < 0.8:
+                    minutes_factor = minutes_ratio
+                elif minutes_ratio > 1.2:
+                    minutes_factor = 1.0 + 0.25 * (minutes_ratio - 1.0)
+                else:
+                    minutes_factor = 1.0
             else:
                 minutes_factor = 1.0
 
-            sim_stat = max(0, np.random.normal(stat_pred * minutes_factor, stat_std))
+            # Use appropriate distribution based on stat type
+            if stat in self.COUNT_STATS:
+                lambda_param = max(0.01, stat_pred * minutes_factor)
+                sim_stat = float(np.random.poisson(lambda_param))
+            else:
+                sim_stat = max(0, np.random.normal(stat_pred * minutes_factor, stat_std))
             simulated_stats[i] = sim_stat
 
         # Analyze prop

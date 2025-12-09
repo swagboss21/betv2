@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS projections (
     p50 REAL,
     p75 REAL,
     p90 REAL,
+    sim_histogram JSONB,  -- Binned histogram for empirical probability calculation
     computed_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(game_id, player_name, stat_type)
 );

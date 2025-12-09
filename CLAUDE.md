@@ -34,7 +34,6 @@ User Query → LLM (Claude) → Tools → Monte Carlo Engine → Response
 - `feature_transformer.py` - Fetch live player/team data from nba_api
 - `injury_adjustment.py` - Boost remaining players when someone OUT
 - `edge_calculator.py` - Convert odds, calculate betting edge
-- `parlay_analyzer.py` - Detect correlated legs, generate thesis
 - `models.py` - Data classes for inputs/outputs
 
 ### MCP Server (`brain_mcp/`)
@@ -103,13 +102,12 @@ Building toward SaaS product:
 
 ```
 brain_mcp/
-  server.py                 # MCP server (5 tools)
+  server.py                 # MCP server (6 tools)
 api/
   queries.py                # Database query functions
   probability.py            # Probability calculations
 simulation/
   engine.py                 # Monte Carlo engine
-  parlay_analyzer.py        # Correlation detection
 batch/
   precompute.py             # Nightly projection job
   scrape_injuries.py        # ESPN injury scraper
@@ -119,7 +117,5 @@ batch/
 
 ## DO NOT
 
-- Suggest switching APIs (SGO is LOCKED)
-- Use >4 seasons of historical data
 - Make LLM do math (engine does math, LLM explains)
 - Push parlays unless user asks (response format rule)
