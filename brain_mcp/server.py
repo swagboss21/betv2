@@ -23,6 +23,7 @@ from api.queries import (
     get_best_props,
     get_injuries,
     get_tonight_injuries,
+    get_tonight_analysis,
     save_bet,
 )
 
@@ -133,6 +134,15 @@ async def list_tools() -> list[Tool]:
                     }
                 },
                 "required": ["player_name", "stat_type", "line", "direction"]
+            }
+        ),
+        Tool(
+            name="get_tonight_analysis",
+            description="Get complete analysis for tonight's games in one call. Returns all games, players with projections, odds (if available), deviation signals, and injury status. Use this for comprehensive pre-game analysis instead of multiple individual calls.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         )
     ]
@@ -285,6 +295,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 "success": True,
                 "bet_id": bet_id,
                 "locked": f"{arguments.get('player_name')} {arguments.get('direction')} {arguments.get('line')} {arguments.get('stat_type')}"
+            }
+
+        elif name == "get_tonight_analysis":
+            analysis = get_tonight_analysis()
+            result = {
+                "games": analysis.get("games", []),
+                "player_count": len(analysis.get("players", [])),
+                "injury_count": analysis.get("injury_count", 0),
+                "odds_count": analysis.get("odds_count", 0),
+                "players": analysis.get("players", [])
             }
 
         else:

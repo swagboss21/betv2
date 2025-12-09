@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS projections (
     p75 REAL,
     p90 REAL,
     sim_histogram JSONB,  -- Binned histogram for empirical probability calculation
+    -- Deviation signal columns (for hot/cold streak detection)
+    l5_avg REAL,   -- Last 5 games average for this stat
+    szn_avg REAL,  -- Season average for this stat
+    l5_std REAL,   -- Last 5 games standard deviation
     computed_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(game_id, player_name, stat_type)
 );
@@ -52,7 +56,24 @@ CREATE TABLE IF NOT EXISTS injuries (
 
 CREATE INDEX IF NOT EXISTS idx_injuries_team ON injuries(team);
 
--- 4. users
+-- 4. odds - Sportsbook lines from SGO API
+CREATE TABLE IF NOT EXISTS odds (
+    id SERIAL PRIMARY KEY,
+    game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
+    player_name TEXT NOT NULL,
+    stat_type VARCHAR(10) NOT NULL,  -- pts, reb, ast, stl, blk, tov, fg3m
+    line REAL NOT NULL,
+    over_odds TEXT DEFAULT '-110',
+    under_odds TEXT DEFAULT '-110',
+    book VARCHAR(20) DEFAULT 'consensus',
+    pulled_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(game_id, player_name, stat_type, book)
+);
+
+CREATE INDEX IF NOT EXISTS idx_odds_game ON odds(game_id);
+CREATE INDEX IF NOT EXISTS idx_odds_player ON odds(player_name);
+
+-- 5. users
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,

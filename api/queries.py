@@ -40,7 +40,7 @@ def get_projection(player_name: str, stat_type: str, game_id: Optional[str] = No
         line: Optional line to calculate probability for (ANY value - supports alternate lines)
 
     Returns:
-        Projection dict with mean, std, p10-p90, and if line provided: prob_over, prob_under
+        Projection dict with mean, std, p10-p90, deviation, and if line provided: prob_over, prob_under
     """
     from api.probability import (
         prob_over, prob_under,
@@ -51,13 +51,15 @@ def get_projection(player_name: str, stat_type: str, game_id: Optional[str] = No
     with get_db_cursor() as cursor:
         if game_id:
             cursor.execute("""
-                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90, sim_histogram
+                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90,
+                       sim_histogram, l5_avg, szn_avg, l5_std
                 FROM projections
                 WHERE LOWER(player_name) = LOWER(%s) AND stat_type = %s AND game_id = %s
             """, (player_name, stat_type, game_id))
         else:
             cursor.execute("""
-                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90, sim_histogram
+                SELECT game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90,
+                       sim_histogram, l5_avg, szn_avg, l5_std
                 FROM projections
                 WHERE LOWER(player_name) = LOWER(%s) AND stat_type = %s
                 ORDER BY computed_at DESC
@@ -69,6 +71,18 @@ def get_projection(player_name: str, stat_type: str, game_id: Optional[str] = No
             return None
 
         result = dict(row)
+
+        # Calculate deviation signal (hot/cold indicator)
+        # Formula: deviation = (l5_avg - szn_avg) / max(l5_std, 0.5)
+        l5_avg = result.get('l5_avg')
+        szn_avg = result.get('szn_avg')
+        l5_std = result.get('l5_std')
+
+        if l5_avg is not None and szn_avg is not None:
+            std_safe = max(l5_std or 0.5, 0.5)
+            result['deviation'] = round((l5_avg - szn_avg) / std_safe, 2)
+        else:
+            result['deviation'] = None
 
         # If line provided, calculate probabilities
         if line is not None:
@@ -85,8 +99,9 @@ def get_projection(player_name: str, stat_type: str, game_id: Optional[str] = No
                 )
                 result['prob_under'] = 1.0 - result['prob_over']
 
-        # Don't return the histogram to the caller (it's internal)
+        # Don't return internal fields to the caller
         result.pop('sim_histogram', None)
+        result.pop('l5_std', None)  # Keep l5_avg and szn_avg for transparency
 
         return result
 
@@ -149,12 +164,28 @@ def get_best_props(min_edge: float = 0.05, limit: int = 10) -> list[dict]:
     results = []
     book_prob = 0.524  # -110 implied probability
 
+    # Minimum realistic lines by stat type (sportsbooks don't offer lines below these)
+    min_lines = {
+        'pts': 5.5,
+        'reb': 2.5,
+        'ast': 1.5,
+        'stl': 0.5,
+        'blk': 0.5,
+        'tov': 0.5,
+        'fg3m': 0.5
+    }
+
     for proj in projections:
         mean = proj['mean']
         std = proj['std']
         line = proj['p50']  # Use median as "market line"
 
         if std <= 0 or line is None:
+            continue
+
+        # Skip unrealistic lines - sportsbooks don't offer these
+        min_line = min_lines.get(proj['stat_type'], 0.5)
+        if line < min_line:
             continue
 
         # Calculate probabilities using empirical method (more accurate for count data)
@@ -462,3 +493,173 @@ def set_user_paid(user_id: str, is_paid: bool = True) -> None:
     """
     with get_db_cursor() as cursor:
         cursor.execute("UPDATE users SET is_paid = %s WHERE id = %s", (is_paid, user_id))
+
+
+def get_tonight_analysis() -> dict:
+    """
+    Get complete analysis for tonight's games in one call.
+
+    Returns all games, players, projections, odds, and injuries
+    needed for the agent to make recommendations.
+
+    Returns:
+        Dict with:
+        - games: List of tonight's games
+        - players: List of player analysis dicts
+    """
+    from api.probability import (
+        prob_over_empirical,
+        prob_over_from_percentiles
+    )
+
+    with get_db_cursor() as cursor:
+        # Get tonight's games
+        cursor.execute("""
+            SELECT id, home_team, away_team, starts_at, status
+            FROM games
+            WHERE status = 'scheduled' OR DATE(starts_at) = CURRENT_DATE
+            ORDER BY starts_at
+        """)
+        games = [dict(row) for row in cursor.fetchall()]
+
+        if not games:
+            return {"games": [], "players": []}
+
+        game_ids = [g['id'] for g in games]
+
+        # Get all projections for tonight's games with deviation columns
+        cursor.execute("""
+            SELECT p.game_id, p.player_name, p.stat_type,
+                   p.mean, p.std, p.p10, p.p25, p.p50, p.p75, p.p90,
+                   p.l5_avg, p.szn_avg, p.l5_std, p.sim_histogram,
+                   g.home_team, g.away_team
+            FROM projections p
+            JOIN games g ON p.game_id = g.id
+            WHERE p.game_id = ANY(%s)
+            ORDER BY p.player_name, p.stat_type
+        """, (game_ids,))
+        projections = cursor.fetchall()
+
+        # Get odds if available
+        cursor.execute("""
+            SELECT game_id, player_name, stat_type, line, over_odds, under_odds, book
+            FROM odds
+            WHERE game_id = ANY(%s)
+        """, (game_ids,))
+        odds_rows = cursor.fetchall()
+
+        # Build odds lookup: (game_id, player_name, stat_type) -> odds
+        odds_lookup = {}
+        for o in odds_rows:
+            key = (o['game_id'], o['player_name'], o['stat_type'])
+            odds_lookup[key] = {
+                'line': o['line'],
+                'over_odds': o['over_odds'],
+                'under_odds': o['under_odds'],
+                'book': o['book']
+            }
+
+        # Get injuries for teams playing tonight
+        teams = set()
+        for g in games:
+            teams.add(g['home_team'])
+            teams.add(g['away_team'])
+
+        cursor.execute("""
+            SELECT player_name, team, status, injury
+            FROM injuries
+            WHERE team = ANY(%s)
+        """, (list(teams),))
+        injuries = cursor.fetchall()
+
+        # Build injury lookup: player_name -> status
+        injury_lookup = {i['player_name']: i['status'] for i in injuries}
+
+    # Aggregate projections by player
+    players_dict = {}
+
+    for proj in projections:
+        player_name = proj['player_name']
+
+        if player_name not in players_dict:
+            # Determine team from game context
+            game_id = proj['game_id']
+            game = next((g for g in games if g['id'] == game_id), None)
+            team = None
+            if game:
+                # Player could be on either team - we don't have team info in projections
+                # For now, leave team as None or infer from another source
+                pass
+
+            players_dict[player_name] = {
+                'name': player_name,
+                'game_id': game_id,
+                'injury_status': injury_lookup.get(player_name),
+                'projections': {},
+            }
+
+        stat_type = proj['stat_type']
+
+        # Calculate deviation
+        l5_avg = proj['l5_avg']
+        szn_avg = proj['szn_avg']
+        l5_std = proj['l5_std']
+        deviation = None
+        if l5_avg is not None and szn_avg is not None:
+            std_safe = max(l5_std or 0.5, 0.5)
+            deviation = round((l5_avg - szn_avg) / std_safe, 2)
+
+        # Get odds for this player/stat
+        odds_key = (proj['game_id'], player_name, stat_type)
+        odds_data = odds_lookup.get(odds_key)
+
+        # Build projection data
+        proj_data = {
+            'mean': round(proj['mean'], 1),
+            'p50': round(proj['p50'], 1) if proj['p50'] else None,
+            'p10': round(proj['p10'], 1) if proj['p10'] else None,
+            'p90': round(proj['p90'], 1) if proj['p90'] else None,
+            'deviation': deviation,
+            'l5_avg': round(l5_avg, 1) if l5_avg else None,
+            'szn_avg': round(szn_avg, 1) if szn_avg else None,
+        }
+
+        # Add odds and probability if available
+        if odds_data:
+            line = odds_data['line']
+            proj_data['odds'] = {
+                'line': line,
+                'over': odds_data['over_odds'],
+                'under': odds_data['under_odds'],
+            }
+
+            # Calculate probability for the line
+            if proj.get('sim_histogram'):
+                prob_over = prob_over_empirical(proj['sim_histogram'], line)
+            else:
+                prob_over = prob_over_from_percentiles(
+                    proj['p10'] or 0, proj['p25'] or 0, proj['p50'] or 0,
+                    proj['p75'] or 0, proj['p90'] or 0, line
+                )
+            proj_data['prob_over'] = round(prob_over, 3)
+            proj_data['prob_under'] = round(1.0 - prob_over, 3)
+
+        players_dict[player_name]['projections'][stat_type] = proj_data
+
+    # Format games
+    formatted_games = []
+    for g in games:
+        formatted_games.append({
+            'id': g['id'],
+            'matchup': f"{g['away_team']} @ {g['home_team']}",
+            'home_team': g['home_team'],
+            'away_team': g['away_team'],
+            'starts_at': g['starts_at'].isoformat() if g['starts_at'] else None,
+        })
+
+    return {
+        'games': formatted_games,
+        'players': list(players_dict.values()),
+        'injury_count': len(injuries),
+        'odds_count': len(odds_rows),
+    }

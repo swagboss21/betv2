@@ -201,6 +201,7 @@ def run_simulations(game: dict) -> list[dict]:
         List of projection dicts with:
         - game_id, player_name, stat_type
         - mean, std, p10, p25, p50, p75, p90
+        - l5_avg, szn_avg, l5_std (for deviation signal)
         - computed_at
     """
     from simulation.engine import MonteCarloEngine
@@ -224,6 +225,23 @@ def run_simulations(game: dict) -> list[dict]:
         elapsed = time.time() - start_time
         print(f"  Simulation completed in {elapsed:.1f}s")
 
+        # Get player features for L5/season averages (for deviation calculation)
+        # The engine has already fetched these via transformer.get_roster()
+        home_roster = engine.transformer.get_roster(home_team)
+        away_roster = engine.transformer.get_roster(away_team)
+        all_features = {p.player_name: p for p in home_roster + away_roster}
+
+        # Stat name to PlayerFeatures attribute mapping
+        stat_l5_map = {
+            "pts": ("pts_L5_avg", "pts_L5_avg"),  # L5 avg, szn approximation (use same for now)
+            "reb": ("reb_L5_avg", "reb_L5_avg"),
+            "ast": ("ast_L5_avg", "ast_L5_avg"),
+            "stl": ("stl_L5_avg", "stl_L5_avg"),
+            "blk": ("blk_L5_avg", "blk_L5_avg"),
+            "tov": ("tov_L5_avg", "tov_L5_avg"),
+            "fg3m": ("fg3m_L5_avg", "fg3m_L5_avg"),
+        }
+
         # Extract projections for all players
         projections = []
         computed_at = datetime.utcnow().isoformat()
@@ -231,6 +249,9 @@ def run_simulations(game: dict) -> list[dict]:
         for player_name, prediction in result.players.items():
             # Get raw simulation arrays for this player (for histogram)
             raw_player_sims = result.raw_simulations.get(player_name, {})
+
+            # Get player features for L5 stats
+            player_features = all_features.get(player_name)
 
             for stat in STATS:
                 dist = getattr(prediction, stat, None)
@@ -240,6 +261,20 @@ def run_simulations(game: dict) -> list[dict]:
                 # Create histogram from raw simulations if available
                 raw_values = raw_player_sims.get(stat)
                 histogram = create_histogram(raw_values) if raw_values is not None else None
+
+                # Get L5 average for this stat
+                l5_avg = None
+                szn_avg = None
+                l5_std = None
+                if player_features and stat in stat_l5_map:
+                    l5_attr, szn_attr = stat_l5_map[stat]
+                    l5_avg = getattr(player_features, l5_attr, None)
+                    # For season avg, use the mean from our simulation (better estimate)
+                    szn_avg = float(dist.mean) if dist.mean is not None else l5_avg
+                    # Calculate L5 std from raw sims if available
+                    if raw_values is not None and len(raw_values) > 0:
+                        # Use the model's prediction std as a proxy for L5 variability
+                        l5_std = float(dist.std) if dist.std is not None else 0.5
 
                 projections.append({
                     "game_id": game_id,
@@ -253,6 +288,9 @@ def run_simulations(game: dict) -> list[dict]:
                     "p75": float(dist.p75) if dist.p75 is not None else 0.0,
                     "p90": float(dist.p90) if dist.p90 is not None else 0.0,
                     "sim_histogram": histogram,
+                    "l5_avg": l5_avg,
+                    "szn_avg": szn_avg,
+                    "l5_std": l5_std,
                     "computed_at": computed_at
                 })
 
@@ -284,8 +322,9 @@ def save_projections(projections: list[dict]) -> int:
     # Use executemany with ON CONFLICT for upsert
     sql = """
         INSERT INTO projections
-            (game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90, sim_histogram, computed_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (game_id, player_name, stat_type, mean, std, p10, p25, p50, p75, p90,
+             sim_histogram, l5_avg, szn_avg, l5_std, computed_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (game_id, player_name, stat_type)
         DO UPDATE SET
             mean = EXCLUDED.mean,
@@ -296,6 +335,9 @@ def save_projections(projections: list[dict]) -> int:
             p75 = EXCLUDED.p75,
             p90 = EXCLUDED.p90,
             sim_histogram = EXCLUDED.sim_histogram,
+            l5_avg = EXCLUDED.l5_avg,
+            szn_avg = EXCLUDED.szn_avg,
+            l5_std = EXCLUDED.l5_std,
             computed_at = EXCLUDED.computed_at
     """
 
@@ -312,6 +354,9 @@ def save_projections(projections: list[dict]) -> int:
             p["p75"],
             p["p90"],
             json.dumps(p["sim_histogram"]) if p.get("sim_histogram") else None,
+            p.get("l5_avg"),
+            p.get("szn_avg"),
+            p.get("l5_std"),
             p["computed_at"]
         )
         for p in projections
