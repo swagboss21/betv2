@@ -1,8 +1,13 @@
 """
 MCP Server for The Brain - NBA Betting Co-Pilot.
 
-Exposes Monte Carlo projections and betting tools to Claude.
-Run with: python -m mcp.server
+Exposes betting data and tools to Claude via MCP.
+Run with: python -m brain_mcp.server
+
+TODO v2: This file needs rewriting for v2 architecture.
+- Current tools depend on deleted probability module (BROKEN)
+- Target: 5 tools (get_games, get_props, get_injuries, get_tonight_injuries, get_player_analysis)
+- Remove: get_projection, get_best_props, lock_bet, get_tonight_analysis
 """
 import sys
 import os

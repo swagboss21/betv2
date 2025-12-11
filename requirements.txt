@@ -1,9 +1,6 @@
-anthropic>=0.18.0
-python-dotenv>=1.0.0
-psycopg2-binary>=2.9.9
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-numpy>=1.26.0
-unidecode>=1.3.6
-pytest>=8.0.0
-mcp>=1.0.0
+# Core dependencies for The Brain v2
+python-dotenv>=1.0.0      # Environment config
+psycopg2-binary>=2.9.9    # PostgreSQL
+requests>=2.31.0          # HTTP client (SGO API)
+beautifulsoup4>=4.12.0    # HTML parsing (ESPN scraper)
+mcp>=1.0.0                # Model Context Protocol

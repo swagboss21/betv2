@@ -3,6 +3,12 @@ Database query functions for The Brain.
 
 All database operations go through this module.
 Functions return dicts with RealDictCursor.
+
+TODO v2: This file needs rewriting for v2 architecture.
+- Remove: get_projection, get_best_props, get_tonight_analysis (depend on deleted probability module)
+- Remove: save_bet, get_user_bets, get_user_record, user functions (bet tracking removed)
+- Keep: get_games_today, get_injuries, get_tonight_injuries
+- Add: get_props (new props table with JSONB)
 """
 from datetime import datetime
 from typing import Optional

@@ -1,28 +1,46 @@
 # The Brain v2 - NBA Betting Co-Pilot
 
-## What This Is
+## Current Status: IN TRANSITION
 
-Data-first NBA player prop betting assistant. Aggregates odds from multiple sportsbooks, finds best lines, serves structured data to LLMs via MCP.
+**v1 (Monte Carlo) has been archived. v2 (data-first) is not yet implemented.**
 
-**Philosophy:** Sportsbooks have already done the math. Our value is curation, structure, and finding the best available lines.
+The codebase is being restructured. Some files work, some are broken pending v2 implementation.
 
 ---
 
-## Architecture
+## What Works Now
+
+### Batch Scripts
+- `batch/scrape_injuries.py` - ESPN injury scraper (working)
+- `batch/pull_sgo_odds.py` - SGO API client (working, but outputs to old schema)
+- `batch/player_matcher.py` - Fuzzy name matching (working)
+
+### Database
+- `db/schema.sql` - PostgreSQL schema (v1 schema, needs v2 update)
+- `db/connection.py` - Connection helper (working)
+- `db/init_db.py` - Schema initialization (working)
+
+## What's Broken
+
+- `brain_mcp/server.py` - MCP server (depends on deleted probability module)
+- `api/queries.py` - Query functions (depends on deleted probability module)
+- `batch/orchestrate.py` - Does not exist yet
+
+---
+
+## Target v2 Architecture
 
 ```
 User Query → LLM (Claude) → MCP Tools → PostgreSQL → Response
                                 ↑
-                          SGO API (batch refresh)
+                          SGO API + ESPN (batch)
 ```
 
 No predictions. No machine learning. Just smart aggregation.
 
 ---
 
-## Database Schema
-
-### 3 Tables
+## Target v2 Schema (3 tables)
 
 ```sql
 -- Games scheduled for today
@@ -36,17 +54,16 @@ games (
     away_score INT
 )
 
--- Player injuries linked to games
+-- Player injuries
 injuries (
-    game_id TEXT REFERENCES games(id),
     player_name TEXT,
     team VARCHAR(3),
     status VARCHAR(20),  -- OUT, DOUBTFUL, QUESTIONABLE, PROBABLE
     injury TEXT,
-    UNIQUE(game_id, player_name)
+    UNIQUE(player_name, team)
 )
 
--- Multi-book player props
+-- Multi-book player props (NEW)
 props (
     game_id TEXT REFERENCES games(id),
     player_name TEXT,
@@ -55,17 +72,15 @@ props (
     consensus_line REAL,
     consensus_over_odds TEXT,
     consensus_under_odds TEXT,
-    by_book JSONB,    -- {"fanduel": {"line": 25.5, "over": "-115", "under": "-105"}, ...}
-    alt_lines JSONB,  -- [{"book": "fanduel", "line": 23.5, "over": "-170", "under": "+140"}, ...]
+    by_book JSONB,    -- {"fanduel": {"line": 25.5, "over": "-115"}, ...}
+    alt_lines JSONB,  -- alternate lines
     UNIQUE(game_id, player_name, stat_type)
 )
 ```
 
 ---
 
-## MCP Tools
-
-5 tools exposed to Claude Desktop:
+## Target v2 MCP Tools (5)
 
 | Tool | Purpose |
 |------|---------|
@@ -73,92 +88,52 @@ props (
 | `get_props` | Player props with best lines across books |
 | `get_injuries` | Team injury report |
 | `get_tonight_injuries` | All injuries for tonight's games |
-| `get_player_analysis` | Deep dive on one player (all stats, all games) |
-
-### Key Features
-
-- **Best line calculation**: Returns best over (lowest line) and best under (highest line) across all books
-- **Line spread**: Flags props where books disagree significantly
-- **Injury cross-reference**: Props include player injury status
-
----
-
-## Pipeline
-
-```bash
-# Run full pipeline
-/opt/homebrew/bin/python3.11 batch/orchestrate.py
-```
-
-### 4 Steps
-
-1. **GAMES** - Fetch tonight's schedule, cleanup stale games
-2. **INJURIES** - Scrape ESPN injury reports
-3. **PROPS** - Pull SGO odds (multi-book)
-4. **VALIDATE** - Check data integrity
-
-### Options
-
-```bash
---lenient       # Log errors but continue (don't fail)
---skip-props    # Skip SGO odds pull
-```
-
----
-
-## Key Files
-
-```
-batch/
-  orchestrate.py        # Pipeline entry point (4 steps)
-  pull_sgo_odds.py      # SGO API client (multi-book)
-  scrape_injuries.py    # ESPN injury scraper
-  player_matcher.py     # Fuzzy name matching
-  fetch_results.py      # Morning-after bet grading
-
-api/
-  queries.py            # Database queries (props, injuries, games)
-
-brain_mcp/
-  server.py             # MCP server (5 tools)
-
-db/
-  schema.sql            # PostgreSQL schema (3 tables)
-  init_db.py            # Database initialization
-```
+| `get_player_analysis` | Deep dive on one player |
 
 ---
 
 ## SGO API Reference
 
-### Team Mapping
-
-SGO uses different abbreviations:
-```python
-SGO_TO_NBA_TEAM = {
-    "PHO": "PHX",  "BRK": "BKN",  "CHO": "CHA",
-    "GS": "GSW",   "NY": "NYK",   "SA": "SAS",
-    "NO": "NOP",   "WSH": "WAS"
-}
+### Endpoint
+```
+https://api.sportsgameodds.com/v2/events
 ```
 
-### API Parameters
-
+### Request Parameters
 ```python
 params = {
     'leagueID': 'NBA',
     'started': 'false',
     'startsAfter': '2025-12-11',  # REQUIRED - today's date
     'includeOpposingOdds': 'true',
-    'includeAlternateLines': 'true'
+    'includeAlternateLines': 'true'  # for alt lines
 }
 ```
 
-### Response Fields
+### oddID Format
+```
+{statID}-{playerID}-{period}-{betType}-{side}
+# Example: points-LEBRON_JAMES_1_NBA-game-ou-over
+```
 
-- **Lines**: `bookOverUnder` or `fairOverUnder` (not `closeOverUnder`)
-- **Odds**: `bookOdds` or `fairOdds` (not `closeOdds`)
-- **Player IDs**: Format `LEBRON_JAMES_1_NBA`
+### Stat Mapping
+```python
+STAT_MAPPING = {
+    "pts": "points",
+    "reb": "rebounds",
+    "ast": "assists",
+    "stl": "steals",
+    "blk": "blocks",
+    "tov": "turnovers",
+    "fg3m": "threePointersMade",
+}
+```
+
+### Response Fields (NEEDS VERIFICATION)
+Current code uses: `closeOverUnder`, `closeOdds`
+Docs suggest: `bookOverUnder`, `fairOverUnder`, `bookOdds`, `fairOdds`
+
+**TODO:** Get sample API response to verify correct fields for v2.
 
 ---
 
@@ -167,7 +142,7 @@ params = {
 System python is 3.9, MCP needs 3.10+. Use Homebrew:
 
 ```bash
-/opt/homebrew/bin/python3.11 batch/orchestrate.py
+/opt/homebrew/bin/python3.11 <script>
 ```
 
 ---
@@ -175,6 +150,6 @@ System python is 3.9, MCP needs 3.10+. Use Homebrew:
 ## DO NOT
 
 - Recommend props for injured players (always check injuries first)
-- Assume consensus line is best (use best_over/best_under)
+- Assume consensus line is best (use best_over/best_under when available)
 - Push parlays unless user asks
 - Make LLM do math (data layer does math, LLM explains)

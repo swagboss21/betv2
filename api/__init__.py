@@ -1,5 +1,4 @@
-# API module - database queries and probability calculations
+# API module - database queries
 from . import queries
-from . import probability
 
-__all__ = ['queries', 'probability']
+__all__ = ['queries']
